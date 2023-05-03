@@ -3,23 +3,15 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { prismaClient } from "../../clients/db";
 import { GraphqlContext } from "../../intefaces";
-
-interface CreateTweetPayload {
-  content: string;
-  imageURL?: string;
-}
+import UserService from "../../services/user";
+import TweetService, { CreateTweetPayload } from "../../services/tweet";
 
 const s3Client = new S3Client({
-  region: "ap-south-1",
-  credentials: {
-    accessKeyId: "AKIAY3KQ2QPSC5JMP5UI",
-    secretAccessKey: "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",
-  },
+  region: process.env.AWS_DEFAULT_REGION,
 });
 
 const queries = {
-  getAllTweets: () =>
-    prismaClient.tweet.findMany({ orderBy: { createdAt: "desc" } }),
+  getAllTweets: () => TweetService.getAllTweets(),
   getSignedURLForTweet: async (
     parent: any,
     { imageType, imageName }: { imageType: string; imageName: string },
@@ -37,7 +29,7 @@ const queries = {
       throw new Error("Unsupported Image Type");
 
     const putObjectCommand = new PutObjectCommand({
-      Bucket: "piyush-twitter-dev",
+      Bucket: process.env.AWS_S3_BUCKET,
       ContentType: imageType,
       Key: `uploads/${ctx.user.id}/tweets/${imageName}-${Date.now()}`,
     });
@@ -55,12 +47,9 @@ const mutations = {
     ctx: GraphqlContext
   ) => {
     if (!ctx.user) throw new Error("You are not authenticated");
-    const tweet = await prismaClient.tweet.create({
-      data: {
-        content: payload.content,
-        imageURL: payload.imageURL,
-        author: { connect: { id: ctx.user.id } },
-      },
+    const tweet = await TweetService.createTweet({
+      ...payload,
+      userId: ctx.user.id,
     });
 
     return tweet;
@@ -69,8 +58,7 @@ const mutations = {
 
 const extraResolvers = {
   Tweet: {
-    author: (parent: Tweet) =>
-      prismaClient.user.findUnique({ where: { id: parent.authorId } }),
+    author: (parent: Tweet) => UserService.getUserById(parent.authorId),
   },
 };
 
