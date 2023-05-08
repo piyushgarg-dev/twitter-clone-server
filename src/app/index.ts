@@ -21,6 +21,7 @@ export async function initServer() {
   );
 
   const graphqlServer = new ApolloServer<GraphqlContext>({
+    csrfPrevention: false,
     typeDefs: `
        ${User.types}
        ${Tweet.types}
